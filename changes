@@ -1,0 +1,8 @@
+Modified:
+arch/x86/syscalls/syscall_64.tbl
+include/linux/syscalls.h
+kernel/Makefile
+
+Added:
+include/linux/prinfo.h
+kernel/prinfo/prinfo.c

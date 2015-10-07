@@ -1,0 +1,13 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+    echo 'Usage: ./merge <linux_kernel_basedir>'
+    exit 1
+fi
+
+basedir="$1"
+
+cp -iru include "$basedir"
+cp -iru kernel "$basedir"
+cp -iru arch "$basedir"
+
