@@ -15,7 +15,7 @@ struct prinfo {
   pid_t youngest_child_pid; // process id of youngest child
   pid_t younger_sibling_pid; // pid of the oldest among younger siblings
   pid_t older_sibling_pid; // pid of the youngest among older siblings
-  struct timespec start_time; // process start time
+  unsigned long start_time; // process start time
   unsigned long user_time; // CPU time spent in user mode
   unsigned long sys_time; // CPU time spent in system mode
   unsigned long cutime; // total user time of children
@@ -68,6 +68,11 @@ printf("state is %ld\npid is %d\nparent_pid is %d\nyoungest_child_pid is %d\nyou
  *
  * Description:
  *  This function tests for accuracy of PIDs between parents and children.
+ *
+ * Return value:
+ *  0 - This test failed, and so prinfo recognition of parent/child
+ *      relationships is buggy.
+ *  1 - This test succeeded.
  */
 int test1() {
   pid_t fork_result1, fork_result2;
@@ -108,7 +113,7 @@ int test1() {
     }
     else {
       printf("fork failed!\n");
-      return 0;
+      exit(1);
     }
     exit(0);
   }
@@ -119,11 +124,20 @@ int test1() {
   }
   else {
     printf("fork failed!\n");
-    return 0;
+    exit(1);
   }
   return 0;
 }
-
+/*
+ * Function: test2()
+ *
+ * Description:
+ *  This function tests for correctness of sibling relationships between processes.
+ *
+ * Return value:
+ *  0 - The test failed, and prinfo recognition of sibling relationships is buggy.
+ *  1 - The test succeeded.
+ */
 int test2() {
   struct prinfo older, younger;
   pid_t fork_result1, fork_result2;
@@ -143,7 +157,7 @@ int test2() {
     }
     else {
       printf("fork failed!\n");
-      return 0;
+      exit(1);
     }
   }
   else if (fork_result1 == 0) {
@@ -152,12 +166,21 @@ int test2() {
   }
   else {
     printf("fork failed!\n");
-    return 0;
+    exit(1);
   }
   printf("in test2:\nyounger = %d\nyounger of older = %d\n", younger.pid, older.younger_sibling_pid);
   return (older.younger_sibling_pid == younger.pid) && (younger.older_sibling_pid == older.pid);
 }
-
+/*
+ * Function: test3()
+ *
+ * Description:
+ *  This function tests to check the accuracy of prinfo's open FD count.
+ *
+ * Return value:
+ *  0 - The test failed, and prinfo's num_open_fds field is buggy.
+ *  1 - The test succeeded.
+ */
 int test3() {
   int fd1 = open("~/Desktop/fd1.txt", O_RDWR | O_CREAT);
   int fd2 = open("~/Desktop/fd2.txt", O_RDWR | O_CREAT);
