@@ -1,28 +1,30 @@
 #include <asm/signal.h>
 #include <linux/fdtable.h>
+#include <linux/list.h>
 #include <linux/kernel.h>
 #include <linux/prinfo.h>
+#include <linux/syscalls.h>
 #include <linux/signal.h>
 #include <linux/slab.h>
 #include <linux/string.h>
-#include <linux/syscalls.h>
 #include <linux/types.h>
 
 static int count_open_files(struct fdtable *fdt);
+static unsigned long sigset_to_long(sigset_t pending_set);
 static void sum_children_time(struct task_struct *task, struct prinfo *info);
 static void get_pending(struct task_struct *task, unsigned long *out_pending);
-static unsigned long sigset_to_long(sigset_t pending_set);
 
-/*
- *
- */
 SYSCALL_DEFINE1(prinfo, struct prinfo *, info) 
 {
-	struct prinfo *kinfo;
+  	struct prinfo *kinfo;
 	struct task_struct *task;
 	struct files_struct *files;
 	struct fdtable *files_table;	
 	pid_t pid;
+	struct timespec start;
+	
+	printk("Syscall hi.\n");//DEBUG
+
 
 	if (info == NULL)
 		return -EINVAL;
@@ -51,22 +53,42 @@ SYSCALL_DEFINE1(prinfo, struct prinfo *, info)
 	
 	/* Signals */ 
 	get_pending(task, &kinfo->signal);
-	
+
 	/* Open file descriptors */ 
 	files = get_files_struct(task);
 	files_table = files_fdtable(files);
 	kinfo->num_open_fds = count_open_files(files_table);
 
+	printk("About to start doing my stuff in system call\n");//DEBUG
+
+	/* State */
+	kinfo->state = task->state;
+
+	/* PIDs of parent, youngest child, and older and younger siblings */
+	kinfo->parent_pid = task->parent->pid;
+	kinfo->youngest_child_pid = list_entry(&task->children, struct task_struct, children)->pid + 1;
+        printk("pid from task_struct = %d\npid from prinfo = %d\n", task->pid, kinfo->pid);
+	printk("list empty = %d\n", list_empty(&task->sibling));
+	printk("list_next_entry pid = %d\n", list_next_entry(task, sibling)->pid);
+	printk("list_prev_entry pid = %d\n", list_prev_entry(task, sibling)->pid);
+	printk("list_entry pid = %d\n", list_entry(&task->sibling, struct task_struct, sibling)->pid);
+	printk("list_first_entry pid = %d\n", list_first_entry(&task->sibling, struct task_struct, sibling)->pid);
+	printk("list_last_entry pid = %d\n", list_last_entry(&task->sibling, struct task_struct, children)->pid);
+	kinfo->older_sibling_pid = list_prev_entry(task, sibling)->pid;
+	kinfo->younger_sibling_pid = list_next_entry(task, sibling)->pid;
+
+	/* start time */
+	start.tv_nsec = (long) task->start_time;
+	start.tv_sec = (time_t) (start.tv_nsec / 1000000000);
+	kinfo->start_time = start;
+
 	/* Copy struct back to user space */
 	if (copy_to_user(info, kinfo, sizeof(struct prinfo)))
 		return -EFAULT;
-
+	
 	return 0;
-};
+}
 
-/*
- * 
- */
 static int count_open_files(struct fdtable *fdt) 
 { 
         int max = fdt->max_fds;
@@ -79,6 +101,22 @@ static int count_open_files(struct fdtable *fdt)
         }
 
 	return count; 
+}
+
+
+static unsigned long sigset_to_long(sigset_t pending_set) 
+{
+	unsigned long pending;	
+	int sig;
+	
+	pending = 0;
+	for (sig = 1; sig < _NSIG; sig++) {
+		if (sigismember(&pending_set, sig)) {
+			pending |= sigmask(sig);
+		}
+	}
+	
+	return pending;
 }
 
 /*
@@ -114,21 +152,3 @@ static void get_pending(struct task_struct *task, unsigned long *out_pending)
 
 	*out_pending = sigset_to_long(pending_set);
 }
-
-/*
- *
- */
-static unsigned long sigset_to_long(sigset_t pending_set) 
-{
-	unsigned long pending;	
-	int sig;
-	
-	pending = 0;
-	for (sig = 1; sig < _NSIG; sig++) {
-		if (sigismember(&pending_set, sig)) {
-			pending |= sigmask(sig);
-		}
-	}
-	
-	return pending;
-} 
