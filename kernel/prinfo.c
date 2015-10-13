@@ -1,11 +1,13 @@
 /*
  * Authors: Wolf Honore (whonore), Peter Finn ()
- * Emails: whonore@u.rochester.edu, 
  * Assignment: MP 2 CSC 456 Fall 2015
  *
  * Description:
+ *   This program implements the prinfo system call. It contains the defintion
+ *   for the system call itself as well as several helper functions.
  */
 
+#include <asm/cputime.h>
 #include <asm/signal.h>
 #include <linux/fdtable.h>
 #include <linux/kernel.h>
@@ -62,7 +64,7 @@ SYSCALL_DEFINE1(prinfo, struct prinfo *, info)
 	struct fdtable *files_table;	
 	pid_t pid;
 	
-	printk("Syscall hi.\n");//DEBUG
+	//printk("Syscall hi.\n");//DEBUG
 
 	if (info == NULL)
 		return -EINVAL;
@@ -77,9 +79,39 @@ SYSCALL_DEFINE1(prinfo, struct prinfo *, info)
 	if ((task = pid_task(find_vpid(pid), PIDTYPE_PID)) == NULL)
 		return -EINVAL;
 
+	//printk("About to start doing my stuff in system call\n");//DEBUG
+
+	/* State */
+	kinfo->state = task->state;
+
+	/* PIDs of parent, youngest child, and older and younger siblings */
+	kinfo->parent_pid = task->parent->pid;
+	 
+    kinfo->youngest_child_pid = list_entry(task->children.prev, struct task_struct, children)->pid;
+	//kinfo->youngest_child_pid = list_entry(&task->children, struct task_struct, children)->pid;
+	/* Set PID to -1 if child does not exist */
+	if (kinfo->youngest_child_pid == kinfo->pid) 
+	    kinfo->youngest_child_pid = -1;
+    /*printk("pid from task_struct = %d\npid from prinfo = %d\n", task->pid, kinfo->pid);
+	printk("list empty = %d\n", list_empty(&task->sibling));
+	printk("list_next_entry pid = %d\n", list_next_entry(task, sibling)->pid);
+	printk("list_prev_entry pid = %d\n", list_prev_entry(task, sibling)->pid);
+	printk("list_entry pid = %d\n", list_entry(&task->sibling, struct task_struct, sibling)->pid);
+	printk("list_first_entry pid = %d\n", list_first_entry(&task->sibling, struct task_struct, sibling)->pid);
+	printk("list_last_entry pid = %d\n", list_last_entry(&task->sibling, struct task_struct, children)->pid);*/
+	kinfo->older_sibling_pid = list_prev_entry(task, sibling)->pid;
+	kinfo->younger_sibling_pid = list_next_entry(task, sibling)->pid;
+	
+	/* Set PID to -1 if sibling does not exist */
+	if (kinfo->older_sibling_pid == 0)
+	    kinfo->older_sibling_pid = -1;
+    if (kinfo->younger_sibling_pid == 0);
+        kinfo->younger_sibling_pid = -1;
+
 	/* Time stats */
-	kinfo->user_time = task->utime;
-	kinfo->sys_time = task->stime;
+	kinfo->start_time = (unsigned long) task->start_time;
+	kinfo->user_time = cputime_to_nsecs(task->utime);
+	kinfo->sys_time = cputime_to_nsecs(task->stime);
 	sum_children_time(task, kinfo);
 
 	/* User ID */
@@ -96,27 +128,6 @@ SYSCALL_DEFINE1(prinfo, struct prinfo *, info)
 	files = get_files_struct(task);
 	files_table = files_fdtable(files);
 	kinfo->num_open_fds = count_open_files(files_table);
-
-	printk("About to start doing my stuff in system call\n");//DEBUG
-
-	/* State */
-	kinfo->state = task->state;
-
-	/* PIDs of parent, youngest child, and older and younger siblings */
-	kinfo->parent_pid = task->parent->pid;
-	kinfo->youngest_child_pid = list_entry(&task->children, struct task_struct, children)->pid + 1;
-    printk("pid from task_struct = %d\npid from prinfo = %d\n", task->pid, kinfo->pid);
-	printk("list empty = %d\n", list_empty(&task->sibling));
-	printk("list_next_entry pid = %d\n", list_next_entry(task, sibling)->pid);
-	printk("list_prev_entry pid = %d\n", list_prev_entry(task, sibling)->pid);
-	printk("list_entry pid = %d\n", list_entry(&task->sibling, struct task_struct, sibling)->pid);
-	printk("list_first_entry pid = %d\n", list_first_entry(&task->sibling, struct task_struct, sibling)->pid);
-	printk("list_last_entry pid = %d\n", list_last_entry(&task->sibling, struct task_struct, children)->pid);
-	kinfo->older_sibling_pid = list_prev_entry(task, sibling)->pid;
-	kinfo->younger_sibling_pid = list_next_entry(task, sibling)->pid;
-
-	/* start time */
-	kinfo->start_time = (unsigned long) task->start_time;
 
 	/* Copy struct back to user space */
 	if (copy_to_user(info, kinfo, sizeof(struct prinfo)))
@@ -185,7 +196,12 @@ static void sum_children_time(struct task_struct *task, struct prinfo *info)
 		child = list_entry(child_list, struct task_struct, sibling);
 		info->cutime += child->utime;
 		info->cstime += child->stime;
+		
+		printk("child of %d %d %d %lu\n",task->pid, child->pid, child->parent->pid, (unsigned long) child->start_time);
 	}
+	
+	info->cutime = cputime_to_nsecs(info->cutime);
+	info->cstime = cputime_to_nsecs(info->cstime);
 }
 
 /*

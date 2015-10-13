@@ -10,4 +10,5 @@ basedir="$1"
 cp -iru include "$basedir"
 cp -iru kernel "$basedir"
 cp -iru arch "$basedir"
+cp -iru tests/* "$basedir"/../floppy
 

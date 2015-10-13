@@ -1,7 +1,6 @@
 #ifndef _LINUX_PRINFO_H
 #define _LINUX_PRINFO_H
 
-#include <linux/time.h>
 #include <linux/types.h>
 #include <linux/unistd.h>
 

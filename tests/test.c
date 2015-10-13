@@ -1,3 +1,12 @@
+/*
+ * Authors: Wolf Honore (whonore), Peter Finn ()
+ * Assignment: MP 2 CSC 456 Fall 2015
+ *
+ * Description:
+ *   This program tests the prinfo system call by checking values in the prinfo
+ *   struct against expected values.
+ */
+
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -15,6 +24,7 @@
 int test1();
 int test2();
 int test3();
+int test4();
 
 int main(int argc, char **argv) {
     printf ("state offset is %lx\n", __builtin_offsetof (struct prinfo, state));
@@ -39,15 +49,21 @@ int main(int argc, char **argv) {
     printf("Test 2 %s!\n", result);
     result = test3() ? "succeeded" : "failed";
     printf("Test 3 %s!\n", result);
+    result = test4() ? "succeeded" : "failed";
+    printf("Test 4 %s!\n", result);
 
     struct prinfo *info = (struct prinfo *) malloc(sizeof(struct prinfo));
     info->pid = getpid();
     
-    syscall(181, &info);
+	if (syscall(181, info) < 0) {
+	    perror("prinfo failed");
+	    return 0;
+	}
     
     printf("Run ps now.\n");
-    sleep(10);
-    printf("state is %ld\npid is %d\nparent_pid is %d\nyoungest_child_pid is %d\nyounger_sibling_pid is %d\nolder_sibling_pid is %d\nuser_time is %lu\nsys_time is %lu\ncutime is %lu\ncstime is %lu\nuid is %ld\ncomm is %s\nsignal is %lu\nnum_open_fds is %lu\n", info->state, info->pid, info->parent_pid, info->youngest_child_pid, info->younger_sibling_pid, info->older_sibling_pid, info->user_time, info->sys_time, info->cutime, info->cstime, info->uid, info->comm, info->signal, info->num_open_fds);
+    printf("state is %ld\npid is %d\nparent_pid is %d\nyoungest_child_pid is %d\nyounger_sibling_pid is %d\nolder_sibling_pid is %d\nstart_time is %lu\nuser_time is %lu\nsys_time is %lu\ncutime is %lu\ncstime is %lu\nuid is %ld\ncomm is %s\nsignal is %lu\nnum_open_fds is %lu\n", info->state, info->pid, info->parent_pid, info->youngest_child_pid, info->younger_sibling_pid, info->older_sibling_pid, info->start_time, info->user_time, info->sys_time, info->cutime, info->cstime, info->uid, info->comm, info->signal, info->num_open_fds);
+    sleep(100);
+        
     return 0;
 }
 
@@ -62,8 +78,9 @@ int main(int argc, char **argv) {
  * Outputs: None
  *
  * Return value:
- *   1 - Success
- *   0 - Failure
+ *   0 - This test failed, and so prinfo recognition of parent/child 
+ *       relationships is buggy.
+ *   1 - This test succeeded.
  */
 int test1() {
     pid_t fork_result1, fork_result2;
@@ -74,12 +91,12 @@ int test1() {
     
     if ((fork_result1 = fork()) == 0) {
         if ((fork_result2 = fork()) == 0) {
-          // within grandchild
-          sleep(2);
-          exit(0);
+            /* Within grandchild */
+            sleep(10);
+            exit(0);
         }
         else if (fork_result2 > 0) {
-            // within parent
+            /* Within parent */
             struct prinfo *grandparent_info, *parent_info, *grandchild_info;
             parent_pid = getpid();
             grandchild_pid = fork_result2;
@@ -92,17 +109,28 @@ int test1() {
             parent_info->pid = parent_pid;
             grandchild_info->pid = grandchild_pid;
             
+            //DELETE
             printf("Before our system call:\n");
             printf("grandparent's child = %d\n", grandparent_info->youngest_child_pid);
             printf("parent = %d\n", parent_info->pid);
             printf("grandchild's parent = %d\n\n", grandchild_info->parent_pid);
             
-            syscall(181, grandparent_info);
-            syscall(181, parent_info);
-            syscall(181, grandchild_info);
+    		if (syscall(181, grandparent_info) < 0) {
+		        perror("prinfo failed");
+		        return 0;
+		    }
+		    if (syscall(181, parent_info) < 0) {
+		        perror("prinfo failed");
+		        return 0;
+		    }
+		    if (syscall(181, grandchild_info) < 0) {
+		        perror("prinfo failed");
+		        return 0;
+		    }
             
             /* Grandparent's youngest child and grandchild's parent should be parent */
-            int ret1 = (grandparent_info->youngest_child_pid == parent_info->pid && parent_info->pid == grandchild_info->parent_pid);
+            int ret1 = (grandparent_info->youngest_child_pid == parent_info->pid 
+                        && parent_info->pid == grandchild_info->parent_pid);
             
             /* Parent's parent should be grandparent */
             int ret2 = (parent_info->parent_pid == grandparent_info->pid);
@@ -110,6 +138,7 @@ int test1() {
             /* Parent's youngest child should be grandchild */
             int ret3 = (grandchild_info->pid == parent_info->youngest_child_pid);
             
+            //DELETE
             printf("grandparent's child = %d\n", grandparent_info->youngest_child_pid);
             printf("parent = %d\n", parent_info->pid);
             printf("grandchild's parent = %d\n\n", grandchild_info->parent_pid);
@@ -119,19 +148,19 @@ int test1() {
             return (ret1 && ret2 && ret3);
         }
         else {
-          printf("fork failed!\n");
-          return 0;
+            perror("fork failed");
+            return 0;
         }
         
         exit(0);
     }
     else if (fork_result1 > 0) {
-        // within grandparent
+        /* Within grandparent */
         if (waitpid(fork_result1, &waitstatus2, 0) == -1)
             return 0;
     }
     else {
-        printf("fork failed!\n");
+        perror("fork failed");
         return 0;
     }
     
@@ -142,15 +171,17 @@ int test1() {
  * Function: test2()
  *
  * Description:
- *   This function checks that sibling PIDs are set correctly.
+ *   This function tests for correctness of sibling relationships between 
+ *   processes.
  *
  * Inputs: None
  *
  * Outputs: None
  *
  * Return value:
- *   1 - Success
- *   0 - Failure
+ *   0 - The test failed, and prinfo recognition of sibling relationships is 
+ *       buggy.
+ *   1 - The test succeeded.
  */
 int test2() {
     struct prinfo *older, *younger;
@@ -160,80 +191,157 @@ int test2() {
     older = (struct prinfo *) malloc(sizeof(struct prinfo));
     younger = (struct prinfo *) malloc(sizeof(struct prinfo));
     
+    /* Spawn two child processes */
     if ((fork_result1 = fork()) > 0) {
         if ((fork_result2 = fork()) > 0) {
             older->pid = fork_result1;
             younger->pid = fork_result2;
-            
-            syscall(181, older);
-            syscall(181, younger);
+        
+    		if (syscall(181, older) < 0) {
+		        perror("prinfo failed");
+		        return 0;
+		    }
+    		if (syscall(181, younger) < 0) {
+		       perror("prinfo failed");
+		       return 0;
+		    }
             
             if (waitpid(fork_result1, &waitstatus, 0) == -1) return 0;
             if (waitpid(fork_result2, &waitstatus, 0) == -1) return 0;
         }
         else if (fork_result2 == 0) {
-            sleep(1);
+            sleep(10);
             exit(0);
         }
         else {
-            printf("fork failed!\n");
+            perror("fork failed!");
             return 0;
         }
     }
     else if (fork_result1 == 0) {
-        sleep(1);
+        sleep(10);
         exit(0);
     }
     else {
-        printf("fork failed!\n");
+        perror("fork failed");
         return 0;
     }
     
     printf("in test2:\nyounger = %d\nyounger of older = %d\n", younger->pid, older->younger_sibling_pid);
+    printf("in test2:\nolder = %d\nolder of younger = %d\n", younger->pid, older->younger_sibling_pid);
     
     /* Older's younger sibling should be younger and vice-versa */
-    return (older->younger_sibling_pid == younger->pid) && (younger->older_sibling_pid == older->pid);
+    return ((older->younger_sibling_pid == younger->pid) 
+            && (younger->older_sibling_pid == older->pid));
 }
 
 /*
  * Function: test3()
  *
  * Description:
- *   This function checks that open file descriptors are counted correctly.
+ *   This function tests to check the accuracy of prinfo's open FD count.
  *
  * Inputs: None
  *
  * Outputs: None
  *
  * Return value:
- *   1 - Success
- *   0 - Failure
+ *   0 - The test failed, and prinfo's num_open_fds field is buggy.
+ *   1 - The test succeeded.
  */
 int test3() {
-    int fd1 = open("~/Desktop/fd1.txt", O_RDWR | O_CREAT);
-    int fd2 = open("~/Desktop/fd2.txt", O_RDWR | O_CREAT);
+    int fd1 = open("fd1.txt", O_RDWR | O_CREAT);
+    int fd2 = open("fd2.txt", O_RDWR | O_CREAT);
     if (fd1 == -1 || fd2 == -1) {
-        printf("Error opening files\n");
+        fprintf(stderr, "Error opening files\n");
+        return 0;
     }
     
     struct prinfo *info;
+    info = (struct prinfo *) malloc(sizeof(struct prinfo));
+    
     info->pid = getpid();
     
-    syscall(181, info);
-    
-    printf("in test3: open fds = %lu should be 2\n", info->num_open_fds);
-    int ret1 = (info->num_open_fds == 2);
-    close(fd2);
+	if (syscall(181, info) < 0) {
+	    perror("prinfo failed");
+	    return 0;
+	}
 
-    syscall(181, info);
+    int ret1 = (info->num_open_fds == 5);
+    if (close(fd2) < 0) {
+        perror("close failed");
+        return 0;
+    }   
+
+	if (syscall(181, info) < 0) {
+	    perror("prinfo failed");
+	    return 0;
+	}
+
+    int ret2 = (info->num_open_fds == 4);
+    if (close(fd1) < 0) {
+        perror("close failed");
+        return 0;
+    }
     
-    printf("in test3: open fds = %lu should be 1\n", info->num_open_fds);
-    int ret2 = (info->num_open_fds == 1);
-    close(fd1);
+	if (syscall(181, info) < 0) {
+	    perror("prinfo failed");
+	    return 0;
+	}
+
+    int ret3 = (info->num_open_fds == 3);
     
-    syscall(181, &info);
+    return (ret1 && ret2 && ret3);
+}
+
+/*
+ * Function: test4()
+ *
+ * Description:
+ *   This function tests that pending signals are correctly stored in the 
+ *   prinfo struct.
+ *
+ * Inputs: None
+ *
+ * Outputs: None
+ *
+ * Return value:
+ *   0 - This test failed, and so the pending signal set is not correctly 
+ *       stored.
+ *   1 - This test succeeded.
+ */
+int test4() {
+    struct prinfo *info; 
     
-    printf("in test3: open fds = %lu should be 0\n", info->num_open_fds);
-    return (ret1 && ret2 && (info->num_open_fds == 0));
+    info = (struct prinfo *) malloc(sizeof(struct prinfo));
+    
+    info->pid = getpid();
+    
+    /* Blocks SIGUSR2 and then sends SIGUSR2 to this process */
+	sigset_t block;
+	sigemptyset(&block);
+	sigaddset(&block, SIGUSR2);
+	sigprocmask(SIG_BLOCK, &block, NULL);
+	if (kill(info->pid, SIGUSR2) < 0) {
+	    perror("kill failed");
+	    return 0;
+	}
+	
+	if (syscall(181, info) < 0) {
+	    perror("prinfo failed");
+	    return 0;
+	}
+	
+	/* Print out list of signals */
+	int i;
+    int max = 8 * sizeof(unsigned long);
+
+    printf("The list of pending signals:\n");
+    for (i = max - 1; i >= 0; i--) {
+	    printf("%d", (int) ((info->signal >> i) & 0x01));
+    }
+    printf("\n");
+	
+	return (info->signal = 2 << (SIGUSR2 - 1));
 }
 
