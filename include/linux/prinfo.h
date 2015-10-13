@@ -12,7 +12,7 @@ struct prinfo {
 	pid_t youngest_child_pid;    /* process id of youngest child */
 	pid_t younger_sibling_pid;   /* pid of the oldest among younger siblings */
 	pid_t older_sibling_pid;     /* pid of the youngest among older siblings */
-	struct timespec start_time;  /* process start time */
+	unsigned long start_time;    /* process start time */
 	unsigned long user_time;     /* CPU time spent in user mode */
 	unsigned long sys_time;      /* CPU time spent in system mode */
 	unsigned long cutime;        /* total user time of children */

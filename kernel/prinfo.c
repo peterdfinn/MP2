@@ -61,7 +61,6 @@ SYSCALL_DEFINE1(prinfo, struct prinfo *, info)
 	struct files_struct *files;
 	struct fdtable *files_table;	
 	pid_t pid;
-	struct timespec start;
 	
 	printk("Syscall hi.\n");//DEBUG
 
@@ -117,9 +116,7 @@ SYSCALL_DEFINE1(prinfo, struct prinfo *, info)
 	kinfo->younger_sibling_pid = list_next_entry(task, sibling)->pid;
 
 	/* start time */
-	start.tv_nsec = (long) task->start_time;
-	start.tv_sec = (time_t) (start.tv_nsec / 1000000000);
-	kinfo->start_time = start;
+	kinfo->start_time = (unsigned long) task->start_time;
 
 	/* Copy struct back to user space */
 	if (copy_to_user(info, kinfo, sizeof(struct prinfo)))
