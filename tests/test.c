@@ -60,10 +60,10 @@ int main(int argc, char **argv) {
 	    return 0;
 	}
     
-    printf("Run ps now.\n");
     printf("state is %ld\npid is %d\nparent_pid is %d\nyoungest_child_pid is %d\nyounger_sibling_pid is %d\nolder_sibling_pid is %d\nstart_time is %lu\nuser_time is %lu\nsys_time is %lu\ncutime is %lu\ncstime is %lu\nuid is %ld\ncomm is %s\nsignal is %lu\nnum_open_fds is %lu\n", info->state, info->pid, info->parent_pid, info->youngest_child_pid, info->younger_sibling_pid, info->older_sibling_pid, info->start_time, info->user_time, info->sys_time, info->cutime, info->cstime, info->uid, info->comm, info->signal, info->num_open_fds);
+    printf("Run ps now.\n");
     sleep(100);
-        
+    
     return 0;
 }
 
@@ -109,24 +109,18 @@ int test1() {
             parent_info->pid = parent_pid;
             grandchild_info->pid = grandchild_pid;
             
-            //DELETE
-            printf("Before our system call:\n");
-            printf("grandparent's child = %d\n", grandparent_info->youngest_child_pid);
-            printf("parent = %d\n", parent_info->pid);
-            printf("grandchild's parent = %d\n\n", grandchild_info->parent_pid);
-            
-    		if (syscall(181, grandparent_info) < 0) {
-		        perror("prinfo failed");
-		        return 0;
-		    }
-		    if (syscall(181, parent_info) < 0) {
-		        perror("prinfo failed");
-		        return 0;
-		    }
-		    if (syscall(181, grandchild_info) < 0) {
-		        perror("prinfo failed");
-		        return 0;
-		    }
+	    if (syscall(181, grandparent_info) < 0) {
+	      perror("prinfo failed");
+	      return 0;
+	    }
+	    if (syscall(181, parent_info) < 0) {
+	      perror("prinfo failed");
+	      return 0;
+	    }
+	    if (syscall(181, grandchild_info) < 0) {
+	      perror("prinfo failed");
+	      return 0;
+	    }
             
             /* Grandparent's youngest child and grandchild's parent should be parent */
             int ret1 = (grandparent_info->youngest_child_pid == parent_info->pid 
@@ -137,11 +131,6 @@ int test1() {
             
             /* Parent's youngest child should be grandchild */
             int ret3 = (grandchild_info->pid == parent_info->youngest_child_pid);
-            
-            //DELETE
-            printf("grandparent's child = %d\n", grandparent_info->youngest_child_pid);
-            printf("parent = %d\n", parent_info->pid);
-            printf("grandchild's parent = %d\n\n", grandchild_info->parent_pid);
             
             if (waitpid(fork_result2, &waitstatus1, 0) == -1)
                 return 0;
@@ -226,9 +215,6 @@ int test2() {
         perror("fork failed");
         return 0;
     }
-    
-    printf("in test2:\nyounger = %d\nyounger of older = %d\n", younger->pid, older->younger_sibling_pid);
-    printf("in test2:\nolder = %d\nolder of younger = %d\n", younger->pid, older->younger_sibling_pid);
     
     /* Older's younger sibling should be younger and vice-versa */
     return ((older->younger_sibling_pid == younger->pid) 
@@ -334,7 +320,7 @@ int test4() {
 	
 	/* Print out list of signals */
 	int i;
-    int max = 8 * sizeof(unsigned long);
+	int max = 8 * sizeof(unsigned long);
 
     printf("The list of pending signals:\n");
     for (i = max - 1; i >= 0; i--) {

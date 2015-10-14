@@ -1,5 +1,5 @@
 /*
- * Authors: Wolf Honore (whonore), Peter Finn ()
+ * Authors: Wolf Honore (whonore), Peter Finn (pfinn2)
  * Assignment: MP 2 CSC 456 Fall 2015
  *
  * Description:
@@ -63,8 +63,6 @@ SYSCALL_DEFINE1(prinfo, struct prinfo *, info)
 	struct files_struct *files;
 	struct fdtable *files_table;	
 	pid_t pid;
-	
-	//printk("Syscall hi.\n");//DEBUG
 
 	if (info == NULL)
 		return -EINVAL;
@@ -79,34 +77,26 @@ SYSCALL_DEFINE1(prinfo, struct prinfo *, info)
 	if ((task = pid_task(find_vpid(pid), PIDTYPE_PID)) == NULL)
 		return -EINVAL;
 
-	//printk("About to start doing my stuff in system call\n");//DEBUG
-
 	/* State */
 	kinfo->state = task->state;
 
 	/* PIDs of parent, youngest child, and older and younger siblings */
 	kinfo->parent_pid = task->parent->pid;
 	 
-    kinfo->youngest_child_pid = list_entry(task->children.prev, struct task_struct, children)->pid;
-	//kinfo->youngest_child_pid = list_entry(&task->children, struct task_struct, children)->pid;
+	kinfo->youngest_child_pid = list_first_entry(&task->children, struct task_struct, sibling)->pid;
+
 	/* Set PID to -1 if child does not exist */
 	if (kinfo->youngest_child_pid == kinfo->pid) 
 	    kinfo->youngest_child_pid = -1;
-    /*printk("pid from task_struct = %d\npid from prinfo = %d\n", task->pid, kinfo->pid);
-	printk("list empty = %d\n", list_empty(&task->sibling));
-	printk("list_next_entry pid = %d\n", list_next_entry(task, sibling)->pid);
-	printk("list_prev_entry pid = %d\n", list_prev_entry(task, sibling)->pid);
-	printk("list_entry pid = %d\n", list_entry(&task->sibling, struct task_struct, sibling)->pid);
-	printk("list_first_entry pid = %d\n", list_first_entry(&task->sibling, struct task_struct, sibling)->pid);
-	printk("list_last_entry pid = %d\n", list_last_entry(&task->sibling, struct task_struct, children)->pid);*/
+
 	kinfo->older_sibling_pid = list_prev_entry(task, sibling)->pid;
 	kinfo->younger_sibling_pid = list_next_entry(task, sibling)->pid;
 	
 	/* Set PID to -1 if sibling does not exist */
 	if (kinfo->older_sibling_pid == 0)
 	    kinfo->older_sibling_pid = -1;
-    if (kinfo->younger_sibling_pid == 0);
-        kinfo->younger_sibling_pid = -1;
+	if (kinfo->younger_sibling_pid == 0)
+	    kinfo->younger_sibling_pid = -1;
 
 	/* Time stats */
 	kinfo->start_time = (unsigned long) task->start_time;
