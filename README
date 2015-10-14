@@ -1,0 +1,20 @@
+Authors: Wolf Honore (whonore), Peter Finn (pfinn2)
+Assignment: MP 2 CSC 456 Fall 2015
+
+We modified the following files in the kernel source code:
+    arch/x86/syscalls/syscall_64.tbl
+    include/linux/syscalls.h
+    kernel/Makefile
+We added the following files to the kernel source code:
+    include/linux/prinfo.h
+    kernel/prinfo/prinfo.c
+    
+We split the work up in the following way:
+    Wolf figured out how to create a new system call (SYSCALL_DEFINE, modifiying
+    header files, etc) and filled in the second half of the struct.
+    Peter wrote most of the test functions and filled in the first half of the 
+    struct.
+    We both contributed to debugging and testing at various points.
+    
+Experiments:
+    
